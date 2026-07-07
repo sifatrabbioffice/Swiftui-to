@@ -1,259 +1,307 @@
 import SwiftUI
 
-// MARK: - App Entry
 @main
 struct XogotApp: App {
     var body: some Scene {
         WindowGroup {
-            MainTabBarContainer()
+            XogotMainContainer()
                 .preferredColorScheme(.dark)
+                .edgesIgnoringSafeArea(.all)
         }
     }
 }
 
-// MARK: - Main Container (Custom Floating Tab Bar)
-struct MainTabBarContainer: View {
-    @State private var selectedTab: Tab = .editor
+// MARK: - Root View with Bottom Navigation
+struct XogotMainContainer: View {
+    @State private var activeTab: EditorTab = .editor
     
-    enum Tab: String, CaseIterable {
-        case editor = "Editor"
-        case code = "Code"
-        case play = "Play"
+    enum EditorTab {
+        case editor, code, play
     }
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color(white: 0.05).ignoresSafeArea()
+            Color(red: 0.05, green: 0.05, blue: 0.05).ignoresSafeArea()
             
-            // Views based on selected tab
+            // Main Content Area
             Group {
-                switch selectedTab {
-                case .editor: EditorView()
-                case .code: CodeView()
-                case .play: PlayView()
+                switch activeTab {
+                case .editor: EditorMainView()
+                case .code: CodePanelView()
+                case .play: PlayPanelView()
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(edges: .bottom)
             
-            // Floating Bottom Tab Bar
-            HStack(spacing: 0) {
-                // Left Pill
-                HStack(spacing: 0) {
-                    ForEach(Tab.allCases, id: \.self) { tab in
-                        Button(action: { selectedTab = tab }) {
-                            VStack(spacing: 4) {
-                                Image(systemName: tabIcon(for: tab))
-                                    .font(.system(size: 18, weight: .medium))
-                                Text(tab.rawValue)
-                                    .font(.caption2)
-                                    .fontWeight(.medium)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .foregroundColor(selectedTab == tab ? .blue : .white)
-                            .background(
-                                selectedTab == tab ? Capsule().fill(Color.white.opacity(0.1)) : nil
-                            )
-                        }
-                    }
-                }
-                .padding(4)
-                .background(Capsule().fill(Color(white: 0.15)))
-                
-                Spacer().frame(width: 16)
-                
-                // Right Search Button
-                Button(action: {}) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.white)
-                        .frame(width: 50, height: 50)
-                        .background(Circle().fill(Color(white: 0.15)))
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 25)
-        }
-    }
-    
-    func tabIcon(for tab: Tab) -> String {
-        switch tab {
-        case .editor: return "wrench.fill"
-        case .code: return "doc.text.fill"
-        case .play: return "gamecontroller.fill"
+            // Custom Floating Bottom Bar
+            XogotBottomTabBar(activeTab: $activeTab)
+                .padding(.bottom, 20)
         }
     }
 }
 
-// MARK: - 1. 3D Editor View
-struct EditorView: View {
+// MARK: - Editor Main View (3D Workspace)
+struct EditorMainView: View {
     var body: some View {
         ZStack {
-            // 3D Grid Background (Perspective Lines)
+            // === 3D Grid Simulator ===
             Canvas { context, size in
-                let w = size.width
-                let h = size.height
-                let midX = w / 2
-                let midY = h / 2
-                
-                // Z axis (Blue)
-                context.stroke(Path { $0.move(to: CGPoint(x: 0, y: midY)); $0.addLine(to: CGPoint(x: w, y: midY)) }, with: .color(.blue.opacity(0.6)), lineWidth: 1.5)
-                // Y axis (Green)
-                context.stroke(Path { $0.move(to: CGPoint(x: midX, y: 0)); $0.addLine(to: CGPoint(x: midX, y: h)) }, with: .color(.green.opacity(0.6)), lineWidth: 1.5)
-                // X axis (Red)
-                context.stroke(Path { $0.move(to: CGPoint(x: 0, y: 0)); $0.addLine(to: CGPoint(x: w, y: h)) }, with: .color(.red.opacity(0.4)), lineWidth: 1.0)
+                let midX = size.width / 2
+                let midY = size.height / 2
+                // Blue (Z)
+                context.stroke(Path { $0.move(to: CGPoint(x: 0, y: midY)); $0.addLine(to: CGPoint(x: size.width, y: midY)) }, with: .color(.blue.opacity(0.5)), lineWidth: 1)
+                // Green (Y)
+                context.stroke(Path { $0.move(to: CGPoint(x: midX, y: 0)); $0.addLine(to: CGPoint(x: midX, y: size.height)) }, with: .color(.green.opacity(0.5)), lineWidth: 1)
+                // Red (X - Diagonal)
+                context.stroke(Path { $0.move(to: CGPoint(x: 0, y: 0)); $0.addLine(to: CGPoint(x: size.width, y: size.height)) }, with: .color(.red.opacity(0.3)), lineWidth: 1)
+                // Perspective Grid Lines
+                for i in stride(from: 0, to: size.width, by: 40) {
+                    context.stroke(Path { $0.move(to: CGPoint(x: i, y: 0)); $0.addLine(to: CGPoint(x: i, y: size.height)) }, with: .color(.white.opacity(0.05)), lineWidth: 0.5)
+                }
+                for i in stride(from: 0, to: size.height, by: 40) {
+                    context.stroke(Path { $0.move(to: CGPoint(x: 0, y: i)); $0.addLine(to: CGPoint(x: size.width, y: i)) }, with: .color(.white.opacity(0.05)), lineWidth: 0.5)
+                }
             }
             .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Top Bar (Title + Right Buttons)
-                HStack(spacing: 15) {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 6).fill(Color(white: 0.15)).frame(width: 28, height: 28)
-                            .overlay(Image(systemName: "video.fill").font(.system(size: 14)).foregroundColor(.white))
-                        Text("Xogot").font(.headline).fontWeight(.bold).foregroundColor(.white)
-                        Image(systemName: "chevron.down").font(.system(size: 10)).foregroundColor(.gray)
-                    }
-                    Spacer()
-                    HStack(spacing: 10) {
-                        TopIconButton(icon: "doc.text")
-                        TopIconButton(icon: "target")
-                        TopIconButton(icon: "play.fill", bgColor: .white.opacity(0.2))
-                    }
+                // 1. Top Header & Tools
+                VStack(spacing: 0) {
+                    EditorHeaderView()
+                    EditorToolbarView()
                 }
-                .padding(.horizontal)
-                .padding(.top, 10)
+                .background(Color(red: 0.08, green: 0.08, blue: 0.08))
                 
-                Spacer().frame(height: 8)
-                
-                // 3D Editor Toolbar
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ToolButton(icon: "arrow.up.left.and.arrow.down.right", active: true) // Select
-                        ToolButton(icon: "arrow.up.and.down.and.arrow.left.and.right") // Move
-                        ToolButton(icon: "rotate.3d") // Rotate
-                        ToolButton(icon: "arrow.up.left.and.arrow.down.right.magnifyingglass") // Scale
-                        Divider().frame(height: 16).background(Color.gray.opacity(0.5))
-                        ToolButton(icon: "list.bullet")
-                        ToolButton(icon: "lock")
-                        ToolButton(icon: "square.dashed")
-                        ToolButton(icon: "cube")
-                        Divider().frame(height: 16).background(Color.gray.opacity(0.5))
-                        ToolButton(icon: "sun.max")
-                        ToolButton(icon: "globe")
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                }
-                .background(Color(white: 0.08).opacity(0.9))
-                .padding(.horizontal, 6)
-                
-                // Perspective Dropdown
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.dashed")
-                        .foregroundColor(.gray)
-                    Text("Perspective")
-                        .foregroundColor(.white)
-                    Spacer()
-                    Image(systemName: "house.fill")
-                        .foregroundColor(.white)
-                    Image(systemName: "square.3.layers.3d")
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Capsule().fill(Color(white: 0.25)))
-                .padding(.top, 8)
-                .padding(.horizontal, 16)
+                // 2. Perspective Bar
+                PerspectiveBarView()
+                    .padding(.top, 8)
+                    .padding(.horizontal, 16)
                 
                 Spacer()
                 
-                // 3D Axis Gizmo (Top Right)
+                // 3. Bottom Overlay Controls
+                HStack(alignment: .bottom) {
+                    // Left: Undo/Redo
+                    VStack(spacing: 14) {
+                        FloatingActionButton(icon: "arrow.uturn.left.circle.fill", tint: .blue)
+                        FloatingActionButton(icon: "arrow.uturn.right.circle.fill", tint: .white.opacity(0.5))
+                    }
+                    Spacer()
+                    // Right: 2D/3D Toggle
+                    VStack(spacing: 14) {
+                        FloatingTextButton(text: "3D", tint: .blue)
+                        FloatingTextButton(text: "2D", tint: .white.opacity(0.5))
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 100) // Give space for tab bar
+                
+                // 4. Floating Axis Gizmo (XYZ)
                 HStack {
                     Spacer()
                     VStack {
                         HStack(spacing: 0) {
-                            Text("Y").foregroundColor(.green).offset(y: -12)
+                            Text("Y").foregroundColor(.green).offset(y: -10)
                             Spacer().frame(width: 30)
                         }
-                        HStack(spacing: 16) {
+                        HStack(spacing: 12) {
                             Text("Z").foregroundColor(.blue)
-                            Circle().fill(Color.white.opacity(0.05)).frame(width: 40, height: 40)
-                            Text("X").foregroundColor(.red).offset(y: 12)
+                            Circle().fill(Color.white.opacity(0.05)).frame(width: 30, height: 30)
+                            Text("X").foregroundColor(.red).offset(y: 10)
                         }
                     }
-                    .padding(.trailing, 16)
+                    .padding(.trailing, 12)
                 }
-                .padding(.bottom, 160)
-                
-                // Bottom Left & Right Controls
-                HStack {
-                    VStack(spacing: 12) {
-                        FloatingCircleButton(icon: "arrow.uturn.left.circle.fill", color: .blue)
-                        FloatingCircleButton(icon: "arrow.uturn.right.circle.fill", color: .gray)
-                    }
-                    Spacer()
-                    VStack(spacing: 12) {
-                        FloatingTextButton(text: "3D", color: .blue)
-                        FloatingTextButton(text: "2D", color: .gray)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 120)
+                .padding(.bottom, 250)
             }
         }
     }
 }
 
-// MARK: - 2. Code View
-struct CodeView: View {
+// MARK: - Code Panel (Empty State)
+struct CodePanelView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(spacing: 20) {
-                CapsuleButton(icon: "doc.text", title: "New Script")
-                CapsuleButton(icon: nil, title: "Open")
+                CapsuleMenuButton(icon: "doc.text", title: "New Script")
+                CapsuleMenuButton(icon: nil, title: "Open")
             }
         }
     }
 }
 
-// MARK: - 3. Play View
-struct PlayView: View {
+// MARK: - Play Panel (Empty State)
+struct PlayPanelView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 Text("Game is not running")
                     .font(.title3)
                     .foregroundColor(.white)
                     .padding(.bottom, 8)
                 
-                CapsuleButton(icon: "play.fill", title: "Start Game Here")
-                CapsuleButton(icon: "play.fill", title: "Start in Full Screen")
+                CapsuleMenuButton(icon: "play.fill", title: "Start Game Here")
+                CapsuleMenuButton(icon: "play.fill", title: "Start in Full Screen")
                 
                 Text("Remote Device")
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding(.top, 20)
                 
-                CapsuleButton(icon: nil, title: "Get Remote Debugging")
+                CapsuleMenuButton(icon: nil, title: "Get Remote Debugging")
                 
                 Text("Devices with same account or\npaired devices will appear at the top\nof the list")
                     .font(.footnote)
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, 40)
             }
         }
     }
 }
 
+// ==========================================
 // MARK: - UI Helper Components
-struct TopIconButton: View {
-    let icon: String
-    var bgColor: Color = Color(white: 0.15)
+// ==========================================
+
+// 1. Editor Top Header (Xogot + Right Controls)
+struct EditorHeaderView: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            // Project Selector
+            HStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(white: 0.15))
+                        .frame(width: 24, height: 24)
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                }
+                Text("Xogot")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+            Spacer()
+            // Right Icons
+            HStack(spacing: 10) {
+                CircularButton(icon: "doc.text")
+                CircularButton(icon: "target")
+                CircularButton(icon: "play.fill", bgColor: .white.opacity(0.15))
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+}
+
+// 2. Editor Toolbar (Select, Move, Rotate, Scale, etc.)
+struct EditorToolbarView: View {
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ToolIcon(icon: "arrow.up.left.and.arrow.down.right", active: true)
+                ToolIcon(icon: "arrow.up.and.down.and.arrow.left.and.right")
+                ToolIcon(icon: "rotate.3d")
+                ToolIcon(icon: "arrow.up.left.and.arrow.down.right.magnifyingglass")
+                Divider().frame(height: 16).background(Color.gray.opacity(0.4))
+                ToolIcon(icon: "list.bullet")
+                ToolIcon(icon: "lock")
+                ToolIcon(icon: "square.dashed")
+                ToolIcon(icon: "cube")
+                Divider().frame(height: 16).background(Color.gray.opacity(0.4))
+                ToolIcon(icon: "sun.max")
+                ToolIcon(icon: "globe")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+        .padding(.bottom, 4)
+    }
+}
+
+// 3. Perspective Bar (with Home, Camera)
+struct PerspectiveBarView: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "rectangle.dashed")
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+            Text("Perspective")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+            Spacer()
+            Image(systemName: "house.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+            Image(systemName: "camera")
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color(white: 0.25)))
+    }
+}
+
+// 4. Custom Floating Bottom Tab Bar
+struct XogotBottomTabBar: View {
+    @Binding var activeTab: XogotMainContainer.EditorTab
     
+    var body: some View {
+        HStack(spacing: 0) {
+            // Main Tab Pill
+            HStack(spacing: 0) {
+                TabButton(tab: .editor, icon: "wrench.fill", label: "Editor")
+                TabButton(tab: .code, icon: "doc.text.fill", label: "Code")
+                TabButton(tab: .play, icon: "gamecontroller.fill", label: "Play")
+            }
+            .padding(4)
+            .background(Capsule().fill(Color(white: 0.15)))
+            
+            Spacer().frame(width: 14)
+            
+            // Search Button
+            Button(action: {}) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color(white: 0.15)))
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+    
+    @ViewBuilder
+    func TabButton(tab: XogotMainContainer.EditorTab, icon: String, label: String) -> some View {
+        let isActive = activeTab == tab
+        Button(action: { activeTab = tab }) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                Text(label)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+            }
+            .frame(width: 70, height: 42)
+            .foregroundColor(isActive ? .blue : .white)
+            .background(isActive ? Capsule().fill(Color.white.opacity(0.1)) : nil)
+        }
+    }
+}
+
+// === Helper Views ===
+struct CircularButton: View {
+    let icon: String
+    var bgColor: Color = Color(white: 0.12)
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: 16))
@@ -263,66 +311,61 @@ struct TopIconButton: View {
     }
 }
 
-struct ToolButton: View {
+struct ToolIcon: View {
     let icon: String
     var active: Bool = false
-    
     var body: some View {
         Image(systemName: icon)
-            .font(.system(size: 14))
+            .font(.system(size: 15))
             .foregroundColor(active ? .blue : .white)
             .padding(6)
-            .background(active ? Color.blue.opacity(0.2) : Color.clear)
+            .background(active ? Color.blue.opacity(0.15) : Color.clear)
             .cornerRadius(4)
     }
 }
 
-struct FloatingCircleButton: View {
+struct FloatingActionButton: View {
     let icon: String
-    let color: Color
-    
+    let tint: Color
     var body: some View {
         Image(systemName: icon)
-            .font(.system(size: 22))
-            .foregroundColor(color)
+            .font(.system(size: 24))
+            .foregroundColor(tint)
             .frame(width: 44, height: 44)
-            .background(Color(white: 0.15))
+            .background(Color(white: 0.12))
             .clipShape(Circle())
     }
 }
 
 struct FloatingTextButton: View {
     let text: String
-    let color: Color
-    
+    let tint: Color
     var body: some View {
         Text(text)
             .font(.system(size: 18, weight: .semibold))
-            .foregroundColor(color)
+            .foregroundColor(tint)
             .frame(width: 44, height: 44)
-            .background(Color(white: 0.15))
+            .background(Color(white: 0.12))
             .clipShape(Circle())
     }
 }
 
-struct CapsuleButton: View {
+struct CapsuleMenuButton: View {
     let icon: String?
     let title: String
-    
     var body: some View {
         HStack(spacing: 8) {
             if let icon = icon {
                 Image(systemName: icon)
-                    .foregroundColor(.blue)
                     .font(.system(size: 16))
+                    .foregroundColor(.blue)
             }
             Text(title)
                 .font(.headline)
                 .foregroundColor(.blue)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 14)
-        .background(Color(white: 0.12))
-        .clipShape(Capsule())
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Capsule().fill(Color(white: 0.12)))
     }
 }
